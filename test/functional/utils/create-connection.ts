@@ -1,10 +1,9 @@
-import * as AWS from 'aws-sdk'
-import * as http from 'http'
 import {
   DataSource,
   DataSourceOptions,
-  createConnection as typeormCreateConnection,
 } from 'typeorm'
+
+export type DbType = 'mysql' | 'postgres'
 
 // eslint-disable-next-line import/no-extraneous-dependencies
 require('dotenv').config()
@@ -22,23 +21,29 @@ const credentials = {
   },
 }
 
-export const createConnection = async (dbType: DbType, partialOptions: any = {}) => typeormCreateConnection({
-  ...partialOptions,
-  name: dbType,
-  type: dbType === 'mysql' ? 'aurora-mysql' : 'aurora-postgres',
-  database: credentials[dbType].database,
-  secretArn: credentials[dbType]?.secretArn || 'arn:aws:secretsmanager:us-east-1:123456789012:secret:dummy',
-  resourceArn: credentials[dbType]?.resourceArn || 'arn:aws:rds:us-east-1:123456789012:cluster:dummy',
-  region: 'eu-west-1',
-  logging: true,
-  logger: 'simple-console',
-  serviceConfigOptions: !credentials[dbType]?.secretArn && {
-    endpoint: new AWS.Endpoint('http://127.0.0.1:8080'),
-    httpOptions: {
-      agent: new http.Agent(),
+export const createConnection = async (dbType: DbType, partialOptions: any = {}) => {
+  const dataSourceConfig: DataSourceOptions = {
+    ...partialOptions,
+    name: dbType,
+    type: dbType === 'mysql' ? 'aurora-mysql' : 'aurora-postgres',
+    database: credentials[dbType].database,
+    secretArn: credentials[dbType]?.secretArn || 'arn:aws:secretsmanager:us-east-1:123456789012:secret:dummy',
+    resourceArn: credentials[dbType]?.resourceArn || 'arn:aws:rds:us-east-1:123456789012:cluster:dummy',
+    region: 'eu-west-1',
+    logging: true,
+    logger: 'simple-console',
+    serviceConfigOptions: !credentials[dbType]?.secretArn && {
+      endpoint: 'http://127.0.0.1:8080',
+      credentials: {
+        accessKeyId: 'dummy',
+        secretAccessKey: 'dummy',
+      },
     },
-  },
-})
+  }
+  console.log('using config', dataSourceConfig)
+  const dataSource = await new DataSource(dataSourceConfig).initialize()
+  return dataSource
+}
 
 export const createConnectionAndResetData = async (
   dbType: DbType,
@@ -48,8 +53,6 @@ export const createConnectionAndResetData = async (
   await connection.synchronize(true)
   return connection
 }
-
-export type DbType = 'mysql' | 'postgres'
 
 export const useCleanDatabase = async (
   dbType: DbType,
